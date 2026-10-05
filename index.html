@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Urubugu (igisoro), le jeu de semailles du Burundi, jouable dans le navigateur.">
+<meta name="theme-color" content="#14100c">
+<title>Urubugu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one centered column — title, controls, the carved board between two player bars, then the rules. Single dark world: a wooden board on charred earth. */
+:root{
+  --bg:#14100c; --panel:#1c1611; --line:#33281e; --fg:#efe6d6; --muted:#a89780;
+  --wood:#6e4728; --wood-d:#3d2614; --pit:#1d1209; --seed:#e9dcc0;
+  --p1:#e2a843; --p2:#8db4cc; --cap:#e7765a;
+  --display:"Young Serif", Georgia, "Times New Roman", serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:28px 48px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:4px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(40px,8vw,60px);line-height:1;margin:0;text-wrap:balance}
+h1 small{font-size:.38em;color:var(--muted);margin-left:.4em;font-style:italic}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.ctl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+select,button{font:inherit;font-size:14px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+select:focus-visible,button:focus-visible{outline:2px solid var(--p1);outline-offset:2px}
+.btn-main{background:var(--p1);color:#1d1408;border-color:var(--p1);font-weight:600;cursor:pointer;margin-left:auto}
+.btn-main:hover{filter:brightness(1.08)}
+
+.game{display:flex;flex-direction:column;gap:10px}
+.pbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 4px;border-bottom:2px solid transparent;transition:border-color .2s}
+.pbar .who{display:flex;align-items:center;gap:10px;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%}
+.pbar[data-p="0"] .dot{background:var(--p1)} .pbar[data-p="1"] .dot{background:var(--p2)}
+.pbar.active[data-p="0"]{border-color:var(--p1)} .pbar.active[data-p="1"]{border-color:var(--p2)}
+.pbar .stats{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.pbar .stats b{color:var(--fg);font-weight:600}
+
+.board{
+  position:relative;border-radius:18px;padding:clamp(8px,2.2vw,16px);
+  background:
+    repeating-linear-gradient(92deg,rgba(0,0,0,.08) 0 2px,transparent 2px 9px),
+    repeating-linear-gradient(88deg,rgba(255,210,160,.04) 0 1px,transparent 1px 23px),
+    linear-gradient(170deg,var(--wood),var(--wood-d));
+  box-shadow:0 18px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,220,180,.18),inset 0 -2px 0 rgba(0,0,0,.4);
+  display:flex;flex-direction:column;gap:clamp(8px,2vw,14px);
+}
+.half{display:grid;grid-template-rows:auto auto;gap:clamp(4px,1.2vw,9px)}
+.groove{height:3px;border-radius:2px;background:rgba(0,0,0,.45);box-shadow:0 1px 0 rgba(255,220,180,.12)}
+.row{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:clamp(4px,1.2vw,9px)}
+.pit{
+  position:relative;aspect-ratio:1;max-width:100%;border-radius:50%;border:0;padding:0;cursor:default;
+  background:radial-gradient(circle at 42% 38%,#2c1c10,var(--pit) 72%);
+  box-shadow:inset 0 4px 10px rgba(0,0,0,.75),0 1px 0 rgba(255,220,170,.14);
+  transition:box-shadow .15s,transform .15s;
+}
+.pit .seeds{position:absolute;inset:0}
+.pit .seeds i{position:absolute;width:23%;height:19%;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fffaf0,var(--seed) 45%,#b39c74);
+  box-shadow:0 1px 1.5px rgba(0,0,0,.7)}
+.pit .n{position:absolute;right:-3%;bottom:-3%;min-width:1.7em;padding:0 .3em;border-radius:99px;
+  font-size:clamp(9px,1.8vw,12px);font-weight:700;line-height:1.6;text-align:center;font-variant-numeric:tabular-nums;
+  background:rgba(20,14,9,.85);color:var(--fg)}
+.pit.empty .n{opacity:.35}
+.pit.legal{cursor:pointer}
+.pit.legal.p0{box-shadow:inset 0 4px 10px rgba(0,0,0,.75),0 0 0 2px var(--p1)}
+.pit.legal.p1{box-shadow:inset 0 4px 10px rgba(0,0,0,.75),0 0 0 2px var(--p2)}
+.pit.legal:hover{transform:translateY(-2px)}
+.pit.hot{box-shadow:inset 0 4px 10px rgba(0,0,0,.75),0 0 0 3px #fff3d6,0 0 16px rgba(255,230,180,.5)}
+.pit.flash{box-shadow:inset 0 4px 10px rgba(0,0,0,.75),0 0 0 3px var(--cap),0 0 18px rgba(231,118,90,.7)}
+
+.status{min-height:3.2em;padding:12px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.status .msg{font-weight:500}
+.status .sub{font-size:13px;color:var(--muted)}
+.status.win{border-color:var(--p1)}
+
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:18px 26px;border-top:1px solid var(--line);padding-top:20px}
+.rules h2{font-family:var(--display);font-weight:400;font-size:24px;margin:0 0 4px;grid-column:1/-1}
+.rule h3{margin:0 0 2px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--p1)}
+.rule p{margin:0;color:var(--muted);font-size:14px}
+.rule p b{color:var(--fg);font-weight:600}
+.setup{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);font-weight:600}
+.setup button{cursor:pointer}
+.setup button:disabled{opacity:.45;cursor:not-allowed}
+.note{grid-column:1/-1;font-size:13px;color:var(--muted);margin:0}
+.end{position:absolute;inset:0;border-radius:18px;display:grid;place-items:center;padding:16px;background:rgba(14,10,7,.74);backdrop-filter:blur(2px);animation:endFade .45s ease-out;z-index:2}
+.end canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:18px}
+.end-card{position:relative;z-index:1;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center;animation:endPop .7s cubic-bezier(.2,1.5,.4,1) both .1s}
+.end-eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.end-title{font-family:var(--display);font-weight:400;font-size:clamp(30px,8vw,68px);line-height:1;margin:0;color:var(--p1);text-shadow:0 4px 24px rgba(226,168,67,.35)}
+.end.lose .end-title{color:var(--cap);text-shadow:0 4px 24px rgba(231,118,90,.3)}
+.end.lose .end-card{animation:endPop .5s ease-out both .1s,endShake .5s ease-in-out .6s}
+.end-sub{margin:0;color:var(--fg);font-size:clamp(12px,3.2vw,14px);max-width:34ch}
+@media (max-width:440px){.end-eyebrow{display:none}.end-actions{margin-top:4px}}
+.end{overflow:hidden}
+@media (max-width:420px){.end-eyebrow{display:none}.end-actions{margin-top:4px}}
+.end-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
+.end-actions .btn-main{margin-left:0}
+.end-actions button{cursor:pointer}
+.board.over-lose .pit{filter:grayscale(.7) brightness(.7);transition:filter 1.2s}
+@keyframes endFade{from{opacity:0}to{opacity:1}}
+@keyframes endPop{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:1;transform:none}}
+@keyframes endShake{0%,100%{transform:none}20%{transform:translateX(-10px) rotate(-2deg)}40%{transform:translateX(9px) rotate(1.5deg)}60%{transform:translateX(-6px)}80%{transform:translateX(4px)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Jeu de semailles du Burundi et du Rwanda</span>
+    <h1>Urubugu <small>igisoro</small></h1>
+  </header>
+
+  <div class="controls">
+    <label class="ctl" for="mode">Mode
+      <select id="mode"><option value="cpu">Contre l'ordinateur</option><option value="pvp">2 joueurs, même écran</option></select>
+    </label>
+    <label class="ctl" for="level">Niveau
+      <select id="level"><option value="1">Facile</option><option value="2" selected>Moyen</option><option value="4">Difficile</option></select>
+    </label>
+    <label class="ctl" for="first">Qui commence
+      <select id="first"><option value="0">Moi</option><option value="1">L'adversaire</option><option value="r">Au hasard</option></select>
+    </label>
+    <label class="ctl" for="speed">Animation
+      <select id="speed"><option value="240">Lente</option><option value="130" selected>Normale</option><option value="55">Rapide</option><option value="0">Instantanée</option></select>
+    </label>
+    <button class="btn-main" id="newgame" type="button">Nouvelle partie</button>
+  </div>
+
+  <section class="game" aria-label="Plateau de jeu">
+    <div class="pbar" data-p="1" id="bar1"><span class="who"><span class="dot"></span><span class="name">Ordinateur</span></span><span class="stats"></span></div>
+    <div class="board" id="board">
+      <div class="half" id="half1"></div>
+      <div class="groove"></div>
+      <div class="half" id="half0"></div>
+      <div class="end" id="end" hidden>
+        <canvas id="fx"></canvas>
+        <div class="end-card" role="dialog" aria-labelledby="endTitle">
+          <span class="end-eyebrow" id="endEyebrow">Fin de la partie</span>
+          <h2 class="end-title" id="endTitle">Victoire !</h2>
+          <p class="end-sub" id="endSub"></p>
+          <div class="end-actions">
+            <button type="button" class="btn-main" id="endAgain">Rejouer</button>
+            <button type="button" id="endClose">Voir le plateau</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pbar" data-p="0" id="bar0"><span class="who"><span class="dot"></span><span class="name">Toi</span></span><span class="stats"></span></div>
+    <div class="status" id="status" aria-live="polite"><span class="msg"></span><span class="sub"></span></div>
+    <div class="setup" id="setup" hidden>
+      <div class="seg" role="group" aria-label="Action sur les trous">
+        <button type="button" id="tAdd" aria-pressed="true">Poser une graine</button>
+        <button type="button" id="tRemove" aria-pressed="false">Reprendre une graine</button>
+      </div>
+      <button type="button" id="sEven">2 par trou</button>
+      <button type="button" id="sRand">Au hasard</button>
+      <button type="button" id="sClear">Tout reprendre</button>
+      <button type="button" class="btn-main" id="sDone">Valider</button>
+    </div>
+  </section>
+
+  <section class="rules">
+    <h2>Les règles</h2>
+    <div class="rule"><h3>Le plateau</h3><p>4 rangées de 8 trous et 64 graines. Chaque joueur possède les <b>2 rangées de son côté</b> et 32 graines.</p></div>
+    <div class="rule"><h3>Se préparer</h3><p>Avant de commencer, chacun <b>range ses 32 graines comme il veut</b> dans ses 16 trous. Certains trous peuvent rester vides.</p></div>
+    <div class="rule"><h3>Semer</h3><p>Prends toutes les graines de n'importe lequel de tes trous, <b>même s'il n'en contient qu'une</b>, puis sème-les une par une dans le sens antihoraire, sans jamais quitter ton camp.</p></div>
+    <div class="rule"><h3>Relancer</h3><p>S'il n'y a pas de capture et que la dernière graine tombe dans un <b>trou occupé</b>, ramasse ce trou et continue. Si elle tombe dans un trou vide, ton tour s'arrête.</p></div>
+    <div class="rule"><h3>Capturer</h3><p>Si ta dernière graine tombe dans ta <b>rangée intérieure</b>, que le trou soit vide ou occupé, et qu'au moins un des deux trous adverses en face contient des graines, tu captures ces graines et tu les ressèmes chez toi, en commençant par le trou qui suit celui où tu as ramassé en dernier.</p></div>
+    <div class="rule"><h3>Sauter</h3><p>S'il ne te reste <b>qu'une seule graine</b> et qu'elle est dans ta rangée extérieure, tu peux la poser dans le trou suivant ou <b>sauter un trou</b> et la poser dans celui d'après.</p></div>
+    <div class="rule"><h3>Gagner</h3><p>Le joueur qui n'a <b>plus aucune graine</b> dans son camp au début de son tour a perdu.</p></div>
+    <p class="note">Les règles varient d'une région et d'une famille à l'autre. Cette version suit les règles les plus répandues.</p>
+  </section>
+</div>
+
+<script>
+// LOGIC-START
+// Rows: 0 = haut extérieure, 1 = haut intérieure, 2 = bas intérieure, 3 = bas extérieure.
+// Player 0 plays the two bottom rows, player 1 the two top rows. Each player's 16 pits form a ring, sown counterclockwise.
+function ringCell(p,i){
+  if(p===0) return i<8 ? [3,i] : [2,15-i];
+  return i<8 ? [0,7-i] : [1,i-8];
+}
+function cellRing(p,r,c){
+  if(p===0){ if(r===3) return c; if(r===2) return 15-c; return -1; }
+  if(r===0) return 7-c; if(r===1) return 8+c; return -1;
+}
+function newBoard(){ return [0,1,2,3].map(()=>Array(8).fill(2)); }
+// A move code is the ring index of the pit to play; +16 means "jump one pit" (allowed with a lone seed left in the outer row).
+function moves(b,p){ const m=[]; for(let i=0;i<16;i++){const[r,c]=ringCell(p,i); if(b[r][c]>=1) m.push(i);} if(m.length===1 && m[0]<8 && total(b,p)===1) m.push(m[0]+16); return m; }
+function isLoneOuter(b,p){ return moves(b,p).length===2; }
+function clickCell(b,p,code){ const i=code%16; return isLoneOuter(b,p) ? ringCell(p,(i+(code>=16?2:1))%16) : ringCell(p,i); }
+function total(b,p){ let s=0; for(const r of (p===0?[2,3]:[0,1])) for(const v of b[r]) s+=v; return s; }
+function simulate(b0,p,code,ev){
+  const start=code%16; let skip=code>=16;
+  const b=b0.map(r=>r.slice());
+  const get=i=>{const[r,c]=ringCell(p,i); return b[r][c];};
+  const set=(i,v)=>{const[r,c]=ringCell(p,i); b[r][c]=v;};
+  let pos=start, hand=get(pos), captured=0, guard=0, orig=start;
+  set(pos,0); ev&&ev.push({t:'pick',p,i:pos});
+  while(true){
+    while(hand>0){ pos=(pos+(skip?2:1))%16; skip=false; set(pos,get(pos)+1); hand--; ev&&ev.push({t:'drop',p,i:pos}); }
+    if(++guard>200) break;
+    const n=get(pos);
+    if(pos>=8){
+      const c=ringCell(p,pos)[1], oi=p===0?1:2, oo=p===0?0:3;
+      if(b[oi][c]>0 || b[oo][c]>0){
+        const cap=b[oi][c]+b[oo][c]; b[oi][c]=0; b[oo][c]=0; captured+=cap;
+        ev&&ev.push({t:'cap',p,cells:[[oi,c],[oo,c]]});
+        hand=cap; pos=orig; continue;
+      }
+    }
+    if(n===1) break;
+    hand=n; set(pos,0); orig=pos; ev&&ev.push({t:'pick',p,i:pos});
+  }
+  return {b,captured};
+}
+function negamax(b,p,d,a,beta){
+  const ms=moves(b,p);
+  if(!ms.length) return -1000-d;
+  if(d===0) return total(b,p)-total(b,1-p);
+  let best=-Infinity;
+  for(const m of ms){
+    const v=-negamax(simulate(b,p,m).b,1-p,d-1,-beta,-a);
+    if(v>best) best=v; if(v>a) a=v; if(a>=beta) break;
+  }
+  return best;
+}
+function bestMove(b,p,depth){
+  const ms=moves(b,p);
+  if(depth===1 && Math.random()<0.4) return ms[Math.floor(Math.random()*ms.length)];
+  let best=-Infinity, picks=[];
+  for(const m of ms){
+    const v=-negamax(simulate(b,p,m).b,1-p,depth-1,-Infinity,Infinity);
+    if(v>best){best=v;picks=[m];} else if(v===best) picks.push(m);
+  }
+  return picks[Math.floor(Math.random()*picks.length)];
+}
+// LOGIC-END
+
+const $=s=>document.querySelector(s);
+const pits=[[],[],[],[]];
+let state, timer=null;
+
+function seedsHTML(n){
+  const k=Math.min(n,18); let s='';
+  for(let j=0;j<k;j++){
+    const a=j*2.39996+0.6, rad=j===0?0:9+22*Math.sqrt(j/18);
+    s+=`<i style="left:${(50+rad*Math.cos(a)).toFixed(1)}%;top:${(50+rad*Math.sin(a)).toFixed(1)}%;transform:translate(-50%,-50%) rotate(${(j*47)%180}deg)"></i>`;
+  }
+  return s;
+}
+const seedCache=[]; const seeds=n=>seedCache[n]??=seedsHTML(n);
+
+function buildBoard(){
+  const halves={0:$('#half0'),1:$('#half1')};
+  for(let r=0;r<4;r++){
+    const row=document.createElement('div'); row.className='row';
+    for(let c=0;c<8;c++){
+      const b=document.createElement('button'); b.type='button'; b.className='pit p'+(r<2?1:0);
+      b.innerHTML='<span class="seeds"></span><span class="n"></span>';
+      b.addEventListener('click',()=>onPit(r,c));
+      row.appendChild(b); pits[r][c]=b;
+    }
+    (r<2?halves[1]:halves[0]).appendChild(row);
+  }
+}
+
+const isCpu=p=>state.mode==='cpu' && p===1;
+function syncFirstLabels(){ const o=$('#first').options; o[0].text=state.mode==='cpu'?'Moi':'Joueur 1'; o[1].text=state.mode==='cpu'?'L\'ordinateur':'Joueur 2'; }
+const nameOf=p=>state.mode==='cpu' ? (p===0?'Toi':'Ordinateur') : (p===0?'Joueur 1':'Joueur 2');
+
+function renderBoard(b,hot,flash){
+  const legal=new Set();
+  if(state.phase==='setup'){
+    if(!isCpu(state.setupP)) for(let i=0;i<16;i++){const[r,c]=ringCell(state.setupP,i); if(state.tool==='add'?state.reserve>0:b[r][c]>0) legal.add(r*8+c);}
+  }
+  else if(!state.busy && state.winner===null && !isCpu(state.turn))
+    for(const m of moves(b,state.turn)){const[r,c]=clickCell(b,state.turn,m); legal.add(r*8+c);}
+  for(let r=0;r<4;r++) for(let c=0;c<8;c++){
+    const el=pits[r][c], n=b[r][c];
+    el.querySelector('.seeds').innerHTML=seeds(n);
+    el.querySelector('.n').textContent=n;
+    el.classList.toggle('empty',n===0);
+    el.classList.toggle('legal',legal.has(r*8+c));
+    el.classList.toggle('hot',!!hot && hot[0]===r && hot[1]===c);
+    el.classList.toggle('flash',!!flash && flash.some(([fr,fc])=>fr===r&&fc===c));
+    el.disabled=!legal.has(r*8+c);
+    el.setAttribute('aria-label',`${n} graine${n>1?'s':''}`);
+  }
+}
+function renderBars(b){
+  for(const p of [0,1]){
+    const bar=$('#bar'+p);
+    bar.querySelector('.name').textContent=nameOf(p);
+    bar.querySelector('.stats').innerHTML=`<b>${total(b,p)}</b> graines · ${state.caps[p]} capturées`;
+    bar.classList.toggle('active',state.phase==='setup' ? state.setupP===p : state.winner===null && state.turn===p);
+  }
+}
+function setStatus(msg,sub,win){
+  $('#status .msg').textContent=msg; $('#status .sub').textContent=sub||''; $('#status').classList.toggle('win',!!win);
+}
+function idleStatus(){
+  if(state.winner!==null){
+    const w=state.winner, l=1-w;
+    const msg=state.mode==='cpu' ? (w===0?'Victoire ! L\'ordinateur ne peut plus jouer.':'L\'ordinateur gagne. Tu n\'as plus de graines.') : `${nameOf(w)} gagne !`;
+    setStatus(msg, state.mode==='pvp'?`${nameOf(l)} n'a plus de graines.`:'Lance une nouvelle partie pour rejouer.', true); return;
+  }
+  if(isCpu(state.turn)) setStatus('L\'ordinateur réfléchit…', state.last);
+  else if(isLoneOuter(state.board,state.turn)) setStatus(`${state.mode==='cpu'?'Il te':`${nameOf(state.turn)}, il te`} reste une seule graine : touche le trou suivant, ou celui d'après pour sauter un trou.`, state.last);
+  else setStatus(state.mode==='cpu'?'À toi de jouer. Touche un de tes trous.':`Au tour de ${nameOf(state.turn)}.`, state.last);
+}
+function setupStatus(){
+  const who=state.mode==='cpu'?'Range tes 32 graines comme tu veux.':`${nameOf(state.setupP)}, range tes 32 graines comme tu veux.`;
+  setStatus(who, `Réserve : ${state.reserve} graine${state.reserve>1?'s':''}${state.reserve?' à poser avant de valider':''}`);
+  $('#tAdd').setAttribute('aria-pressed',state.tool==='add'); $('#tRemove').setAttribute('aria-pressed',state.tool==='remove');
+  $('#sDone').disabled=state.reserve>0;
+  $('#sDone').textContent=state.mode==='pvp'&&state.setupP===0?'Valider, au tour de Joueur 2':'Commencer la partie';
+}
+function refresh(){
+  syncFirstLabels();
+  $('#setup').hidden=state.phase!=='setup';
+  renderBoard(state.board); renderBars(state.board);
+  state.phase==='setup' ? setupStatus() : idleStatus();
+}
+function fillSide(b,p,fn){ for(let i=0;i<16;i++){const[r,c]=ringCell(p,i); b[r][c]=fn(i);} }
+function randomSide(b,p){ fillSide(b,p,()=>0); for(let k=0;k<32;k++){const[r,c]=ringCell(p,Math.floor(Math.random()*16)); b[r][c]++;} }
+function cpuArrange(){
+  if(+state.level===1){ randomSide(state.board,1); return; }
+  let best=null, bestV=Infinity;
+  for(let t=0;t<40;t++){
+    const b=state.board.map(r=>r.slice()); randomSide(b,1);
+    const v=negamax(b,0,2,-Infinity,Infinity);
+    if(v<bestV){bestV=v;best=b;}
+  }
+  state.board=best;
+}
+function finishSetup(){
+  if(state.reserve>0) return;
+  if(state.mode==='pvp' && state.setupP===0){ state.setupP=1; state.tool='add'; refresh(); return; }
+  if(state.mode==='cpu') cpuArrange();
+  const f=$('#first').value; state.turn=f==='r'?Math.floor(Math.random()*2):+f;
+  state.phase='play'; state.last=(state.mode==='cpu'?'L\'ordinateur a rangé ses graines. ':'')+(state.turn===0&&state.mode==='cpu'?'Tu commences.':`${nameOf(state.turn)} commence.`);
+  refresh();
+  if(isCpu(state.turn)) timer=setTimeout(cpuMove,700);
+}
+function setupAction(fn){ if(state.phase!=='setup') return; fn(); refresh(); }
+
+function onPit(r,c){
+  if(state.phase==='setup'){
+    if(isCpu(state.setupP) || cellRing(state.setupP,r,c)<0) return;
+    if(state.tool==='add' && state.reserve>0){state.board[r][c]++; state.reserve--;}
+    else if(state.tool==='remove' && state.board[r][c]>0){state.board[r][c]--; state.reserve++;}
+    refresh(); return;
+  }
+  if(state.busy || state.winner!==null || isCpu(state.turn)) return;
+  const m=moves(state.board,state.turn).find(m=>{const[cr,cc]=clickCell(state.board,state.turn,m); return cr===r&&cc===c;});
+  if(m!==undefined) play(m);
+}
+
+function play(i){
+  const p=state.turn, ev=[], res=simulate(state.board,p,i,ev);
+  state.busy=true;
+  animate(ev,()=>{
+    state.board=res.b; state.caps[p]+=res.captured; state.busy=false;
+    state.last = res.captured ? `${nameOf(p)} vient de capturer ${res.captured} graines.` : `${nameOf(p)} a semé sans capture.`;
+    state.turn=1-p;
+    if(!moves(state.board,state.turn).length) state.winner=p;
+    refresh();
+    if(state.winner!==null) setTimeout(showEnd,500);
+    if(state.winner===null && isCpu(state.turn)) timer=setTimeout(cpuMove,450);
+  });
+}
+function cpuMove(){
+  const depth=+state.level;
+  setTimeout(()=>play(bestMove(state.board,1,depth)),30);
+}
+
+function animate(ev,done){
+  const base=+state.speed;
+  if(!base){ done(); return; }
+  const d=ev.length>120?base*.45:base, disp=state.board.map(r=>r.slice());
+  let k=0, hand=0;
+  renderBars(disp);
+  const step=()=>{
+    if(k>=ev.length){ done(); return; }
+    const e=ev[k++]; let hot=null, flash=null;
+    if(e.t==='pick'){const[r,c]=ringCell(e.p,e.i); hand+=disp[r][c]; disp[r][c]=0; hot=[r,c];}
+    else if(e.t==='drop'){const[r,c]=ringCell(e.p,e.i); disp[r][c]++; hand--; hot=[r,c];}
+    else { for(const[r,c] of e.cells){hand+=disp[r][c]; disp[r][c]=0;} flash=e.cells; }
+    renderBoard(disp,hot,flash);
+    setStatus(e.t==='cap'?`Capture ! ${hand} graines à ressemer.`:`${nameOf(e.p)} sème…`, `${hand} graine${hand>1?'s':''} en main`);
+    timer=setTimeout(step, e.t==='cap'?d*5:e.t==='pick'?d*1.8:d);
+  };
+  step();
+}
+
+let fxRaf=0;
+function hideEnd(){ $('#end').hidden=true; $('#board').classList.remove('over-lose'); cancelAnimationFrame(fxRaf); }
+function showEnd(){
+  const w=state.winner, lose=state.mode==='cpu' && w===1;
+  const end=$('#end'); end.classList.toggle('lose',lose);
+  $('#endEyebrow').textContent=`Fin de la partie · ${state.caps[w]} graines capturées`;
+  $('#endTitle').textContent=state.mode==='cpu' ? (lose?'Tu as perdu':'Tu as gagné !') : `${nameOf(w)} gagne !`;
+  $('#endSub').textContent=state.mode==='cpu'
+    ? (lose?'L\'ordinateur a vidé ton camp. Essaie un autre rangement de départ.':'L\'ordinateur n\'a plus aucune graine. Bien joué !')
+    : `${nameOf(1-w)} n'a plus aucune graine.`;
+  end.hidden=false;
+  $('#board').classList.toggle('over-lose',lose);
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches) seedFx(lose);
+  $('#endAgain').focus({preventScroll:true});
+}
+// Victory: a shower of seeds bursting from the board. Defeat: a few seeds sliding off the bottom.
+function seedFx(lose){
+  const cv=$('#fx'), dpr=Math.min(devicePixelRatio||1,2), W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; const g=cv.getContext('2d'); g.scale(dpr,dpr);
+  const N=lose?18:90, P=[];
+  for(let i=0;i<N;i++) P.push(lose
+    ? {x:Math.random()*W,y:Math.random()*H*.6,vx:(Math.random()-.5)*.6,vy:Math.random()*.5,r:Math.random()*6,vr:(Math.random()-.5)*.05,s:5+Math.random()*3,d:Math.random()*40}
+    : {x:W/2+(Math.random()-.5)*W*.3,y:H*.55,vx:(Math.random()-.5)*9,vy:-6-Math.random()*9,r:Math.random()*6,vr:(Math.random()-.5)*.3,s:4+Math.random()*4,d:Math.random()*25});
+  const grav=lose?.12:.32; let t=0;
+  const tick=()=>{
+    g.clearRect(0,0,W,H); t++; let alive=0;
+    for(const q of P){
+      if(t<q.d){alive++;continue;}
+      q.vy+=grav; q.x+=q.vx; q.y+=q.vy; q.r+=q.vr;
+      if(q.y>H+20) continue; alive++;
+      g.save(); g.translate(q.x,q.y); g.rotate(q.r);
+      const gr=g.createRadialGradient(-q.s*.3,-q.s*.3,0,0,0,q.s);
+      gr.addColorStop(0,'#fffaf0'); gr.addColorStop(.5,lose?'#8f8270':'#e9dcc0'); gr.addColorStop(1,lose?'#4a3f32':'#b39c74');
+      g.fillStyle=gr; g.beginPath(); g.ellipse(0,0,q.s,q.s*.8,0,0,Math.PI*2); g.fill(); g.restore();
+    }
+    if(alive && t<400) fxRaf=requestAnimationFrame(tick); else g.clearRect(0,0,W,H);
+  };
+  cancelAnimationFrame(fxRaf); fxRaf=requestAnimationFrame(tick);
+}
+
+function start(data){
+  clearTimeout(timer); hideEnd();
+  state={board:newBoard(),turn:0,caps:[0,0],winner:null,busy:false,last:'',phase:'setup',setupP:0,reserve:0,tool:'add',
+    mode:$('#mode').value,level:$('#level').value,speed:$('#speed').value};
+  if(data && data.board){ Object.assign(state,data,{busy:false}); $('#mode').value=state.mode; $('#level').value=state.level; $('#speed').value=state.speed; }
+  refresh();
+  if(state.phase==='play' && state.winner===null && isCpu(state.turn)) timer=setTimeout(cpuMove,450);
+}
+
+buildBoard();
+$('#newgame').addEventListener('click',()=>start());
+$('#mode').addEventListener('change',()=>start());
+$('#level').addEventListener('change',e=>{state.level=e.target.value;});
+$('#speed').addEventListener('change',e=>{state.speed=e.target.value;});
+$('#tAdd').addEventListener('click',()=>setupAction(()=>state.tool='add'));
+$('#tRemove').addEventListener('click',()=>setupAction(()=>state.tool='remove'));
+$('#sEven').addEventListener('click',()=>setupAction(()=>{fillSide(state.board,state.setupP,()=>2); state.reserve=0;}));
+$('#sRand').addEventListener('click',()=>setupAction(()=>{randomSide(state.board,state.setupP); state.reserve=0;}));
+$('#sClear').addEventListener('click',()=>setupAction(()=>{fillSide(state.board,state.setupP,()=>0); state.reserve=32; state.tool='add';}));
+$('#sDone').addEventListener('click',finishSetup);
+$('#endAgain').addEventListener('click',()=>start());
+$('#endClose').addEventListener('click',hideEnd);
+start();
+</script>
+</body>
+</html>
